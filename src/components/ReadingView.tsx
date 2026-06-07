@@ -97,6 +97,7 @@ export default function ReadingView() {
   const [authEmail, setAuthEmail] = useState<string>('');
   const [authPassword, setAuthPassword] = useState<string>('');
   const [isAuthenticating, setIsAuthenticating] = useState<boolean>(false);
+  const [showDbSettingsForm, setShowDbSettingsForm] = useState<boolean>(false);
 
   // CRUD Form Dialog State
   const [showFormModal, setShowFormModal] = useState(false);
@@ -877,148 +878,246 @@ export default function ReadingView() {
               </div>
 
               <div className="flex-1 overflow-y-auto space-y-5 py-4">
-                {/* Dual verification tab selection (Option A vs local pass) */}
                 {!isAdminActive ? (
-                  <div className="bg-[#fcfdfd] border border-gray-200 rounded-lg p-5 space-y-4 shadow-xs text-left">
-                    <div className="flex gap-3 text-left">
-                      <HelpCircle className="w-5 h-5 text-emerald-700 flex-shrink-0 mt-0.5" />
-                      <div>
-                        <h4 className="text-xs font-bold text-gray-900 leading-tight">포트폴리오 관리자 인증</h4>
-                        <p className="text-[11px] text-gray-550 leading-relaxed mt-1.5 font-light">
-                          실제 웹 서버 배포 시, <strong>제3자의 무단 데이터 수정 및 전면 초기화를 완벽하게 원천 차단</strong>하기 위해 학계 및 실무에서 강력히 추천되는 **Supabase 공식 인증(Auth) 해결책**이 내장되어 있습니다.
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Method Selector Tabs */}
-                    <div className="flex border-b border-gray-200 mt-2">
-                      <button
-                        type="button"
-                        onClick={() => setAuthMethod('supabase_auth')}
-                        className={`flex-1 pb-2 text-center text-xs font-bold border-b-2 transition-all cursor-pointer ${
-                          authMethod === 'supabase_auth'
-                            ? 'border-[#2b694d] text-[#2b694d]'
-                            : 'border-transparent text-gray-400 hover:text-gray-600'
-                        }`}
-                      >
-                        🛡️ Supabase 공식 Auth 연동 (추천)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setAuthMethod('passcode')}
-                        className={`flex-1 pb-2 text-center text-xs font-bold border-b-2 transition-all cursor-pointer ${
-                          authMethod === 'passcode'
-                            ? 'border-amber-500 text-amber-600'
-                            : 'border-transparent text-gray-400 hover:text-gray-600'
-                        }`}
-                      >
-                        🔑 간이 패스코드 인증 (로컬)
-                      </button>
-                    </div>
-
-                    <form onSubmit={handleUnlockAdminMode} className="space-y-4 pt-1.5">
-                      {authMethod === 'supabase_auth' ? (
-                        <div className="space-y-3">
-                          <p className="text-[11px] text-gray-400 leading-relaxed font-light">
-                            개인 Supabase 대시보드의 {"Authentication -> Users"} 메뉴에서 가입 완료한 본인만의 이메일 계정으로 안전하게 접근 권한을 얻습니다. RLS(보안 규칙)와 직접 연계되어 해킹이 원천 불가합니다.
+                  <div className="space-y-4">
+                    {/* STEP 1: Supabase DB 연결 설정 */}
+                    <div className="bg-[#f3f9f6] border border-emerald-150 rounded-lg p-5 shadow-xs text-left">
+                      <div className="flex gap-2.5 items-start mb-3">
+                        <DatabaseZap className="w-5 h-5 text-emerald-700 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <h4 className="text-xs font-bold text-gray-900 leading-tight">1단계: Supabase 연결 정보 설정 (필수)</h4>
+                          <p className="text-[10px] text-gray-500 leading-relaxed mt-1 font-light">
+                            포트폴리오 본인 소유의 Supabase DB를 브라우저 로컬 저장소에 연동합니다. 연동이 저장되어야 관리자 기능(글쓰기/수정/삭제)과 공식 로그인을 사용할 수 있습니다.
                           </p>
-                          <div>
-                            <label className="block text-[10px] font-bold text-[#012d1d] mb-1">
-                              관리자 이메일 계정 (EMAIL)
-                            </label>
-                            <div className="relative">
-                              <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
-                                <User className="w-3.5 h-3.5" />
-                              </span>
-                              <input
-                                type="email"
-                                placeholder="admin@example.com"
-                                value={authEmail}
-                                onChange={(e) => setAuthEmail(e.target.value)}
-                                className="w-full pl-9 pr-3 py-2 bg-[#f8f9fa] border border-gray-200 rounded text-xs focus:ring-1 focus:ring-[#2b694d] focus:outline-none"
-                              />
-                            </div>
-                          </div>
-                          <div>
-                            <label className="block text-[10px] font-bold text-[#012d1d] mb-1">
-                              관리자 비밀번호 (PASSWORD)
-                            </label>
-                            <div className="relative">
-                              <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
-                                <Lock className="w-3.5 h-3.5" />
-                              </span>
-                              <input
-                                type="password"
-                                placeholder="••••••••"
-                                value={authPassword}
-                                onChange={(e) => setAuthPassword(e.target.value)}
-                                className="w-full pl-9 pr-3 py-2 bg-[#f8f9fa] border border-gray-200 rounded text-xs focus:ring-1 focus:ring-[#2b694d] focus:outline-none"
-                              />
-                            </div>
-                          </div>
-                          
-                          <button
-                            type="submit"
-                            disabled={isAuthenticating}
-                            className="w-full py-2 bg-[#2b694d] hover:bg-[#1b4332] text-white text-xs font-bold rounded cursor-pointer transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 shadow-xs"
-                          >
-                            {isAuthenticating ? (
-                              <>
-                                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                                <span>Supabase Auth 로그인 중...</span>
-                              </>
-                            ) : (
-                              <>
-                                <Lock className="w-3.5 h-3.5" />
-                                <span>Supabase 관리자 로그온인증</span>
-                              </>
-                            )}
-                          </button>
                         </div>
-                      ) : (
-                        <div className="space-y-3">
-                          <p className="text-[11px] text-amber-800 bg-amber-50 rounded-md p-2.5 leading-relaxed font-light">
-                            💡 초기 간단 테스트용 로컬 브라우저 패스코드 방식입니다. <br />
-                            자신의 포트폴리오를 외부에 완전히 배포하여 공인 서평 보드를 운영하시려면 **전체 RLS 규칙을 차단한 후 공식 Auth 해결책**으로 전환할 것을 적극 권장합니다.
-                          </p>
-                          
+                      </div>
+
+                      {!(credUrl.trim() && credKey.trim()) || showDbSettingsForm ? (
+                        <form onSubmit={(e) => {
+                          e.preventDefault();
+                          saveSupabaseCredentials(credUrl, credKey);
+                          loadData();
+                          setShowDbSettingsForm(false);
+                          showAlert("연동 완료", "Supabase 클라우드 연결 정보가 성공적으로 저장되었습니다. 계속해서 2단계 인증을 진행해 주세요.", "success");
+                        }} className="space-y-3 pt-1 border-t border-emerald-100/50">
                           <div>
-                            <label className="block text-[10px] font-bold text-amber-900 mb-1">
-                              관리자 패스코드 (PASSCODE)
+                            <label className="block text-[10px] font-bold text-[#012d1d] mb-1">
+                              SUPABASE URL
                             </label>
-                            <div className="relative">
-                              <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
-                                <Key className="w-3.5 h-3.5" />
-                              </span>
-                              <input
-                                type="password"
-                                placeholder="인증 패스코드를 입력해 주세요."
-                                value={adminPasscodeInput}
-                                onChange={(e) => setAdminPasscodeInput(e.target.value)}
-                                className="w-full pl-9 pr-3 py-2 bg-white border border-gray-250 rounded text-xs focus:ring-1 focus:ring-[#2b694d] focus:outline-none"
-                              />
-                            </div>
+                            <input
+                              type="url"
+                              placeholder="https://yourprojectid.supabase.co"
+                              required
+                              value={credUrl}
+                              onChange={(e) => setCredUrl(e.target.value)}
+                              className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded text-xs focus:ring-1 focus:ring-[#2b694d] focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-[#012d1d] mb-1">
+                              SUPABASE ANON KEY (PUBLIC KEY)
+                            </label>
+                            <input
+                              type="password"
+                              placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                              required
+                              value={credKey}
+                              onChange={(e) => setCredKey(e.target.value)}
+                              className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded text-xs focus:ring-1 focus:ring-[#2b694d] focus:outline-none"
+                            />
                           </div>
 
+                          <div className="flex justify-end gap-2 pt-1">
+                            {credUrl && credKey && (
+                              <button
+                                type="button"
+                                onClick={() => setShowDbSettingsForm(false)}
+                                className="px-3 py-1.5 bg-gray-150 hover:bg-gray-200 text-gray-700 text-[10px] font-bold rounded cursor-pointer transition-colors"
+                              >
+                                취소
+                              </button>
+                            )}
+                            <button
+                              type="submit"
+                              className="px-3 py-1.5 bg-[#2b694d] hover:bg-[#1b4332] text-white text-[10px] font-bold rounded cursor-pointer hover:shadow-sm"
+                            >
+                              연동 정보 저장 및 활성화
+                            </button>
+                          </div>
+                        </form>
+                      ) : (
+                        <div className="pt-2.5 border-t border-emerald-100/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white p-2.5 rounded border border-emerald-100">
+                          <div className="text-xs">
+                            <div className="flex items-center gap-1.5 text-emerald-800 font-bold text-[11px]">
+                              <Check className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>📡 Supabase 연결 활성화됨</span>
+                            </div>
+                            <span className="block text-[10px] text-gray-400 mt-0.5 truncate max-w-[320px]">
+                              URL: {credUrl} (저장 완료)
+                            </span>
+                          </div>
                           <button
-                            type="submit"
-                            className="w-full py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded cursor-pointer transition-all active:scale-95 shadow-xs flex items-center justify-center gap-1.5"
+                            type="button"
+                            onClick={() => setShowDbSettingsForm(true)}
+                            className="px-2.5 py-1 text-emerald-700 hover:text-white hover:bg-emerald-700 border border-emerald-600 rounded text-[10px] font-bold transition-all cursor-pointer"
                           >
-                            <Key className="w-3.5 h-3.5" />
-                            <span>간이 패스코드 인증완료</span>
+                            연동 정보 수정
                           </button>
                         </div>
                       )}
-                    </form>
+                    </div>
 
-                    <div className="flex justify-end pt-2 border-t border-gray-100">
-                      <button
-                        type="button"
-                        onClick={() => setShowCredModal(false)}
-                        className="px-4 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded cursor-pointer transition-colors"
-                      >
-                        취소 및 닫기 (읽기 전용 방문자 모드로 보기)
-                      </button>
+                    {/* STEP 2: 관리자 인증/로그인 */}
+                    <div className="bg-[#fcfdfd] border border-gray-200 rounded-lg p-5 space-y-4 shadow-xs text-left">
+                      <div className="flex gap-2.5 text-left">
+                        <HelpCircle className="w-5 h-5 text-emerald-700 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <h4 className="text-xs font-bold text-gray-900 leading-tight">2단계: 관리자 로그인 인증</h4>
+                          <p className="text-[10px] text-gray-500 leading-relaxed mt-1 font-light">
+                            실제 웹 서버 배포 시, <strong>제3자가 마음대로 명작 목록을 훼손하거나 전면 초기화하는 행위를 차단</strong>하기 위해 공식 DB 인증 수단이 구비되어 있습니다.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Method Selector Tabs */}
+                      <div className="flex border-b border-gray-200 mt-2">
+                        <button
+                          type="button"
+                          onClick={() => setAuthMethod('supabase_auth')}
+                          className={`flex-1 pb-2 text-center text-xs font-bold border-b-2 transition-all cursor-pointer ${
+                            authMethod === 'supabase_auth'
+                              ? 'border-[#2b694d] text-[#2b694d]'
+                              : 'border-transparent text-gray-400 hover:text-gray-600'
+                          }`}
+                        >
+                          🛡️ Supabase 공식 Auth 연동 (추천)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAuthMethod('passcode')}
+                          className={`flex-1 pb-2 text-center text-xs font-bold border-b-2 transition-all cursor-pointer ${
+                            authMethod === 'passcode'
+                              ? 'border-amber-500 text-amber-600'
+                              : 'border-transparent text-gray-400 hover:text-gray-600'
+                          }`}
+                        >
+                          🔑 간이 패스코드 인증 (로컬)
+                        </button>
+                      </div>
+
+                      <form onSubmit={handleUnlockAdminMode} className="space-y-4 pt-1.5">
+                        {authMethod === 'supabase_auth' ? (
+                          <div className="space-y-3">
+                            <p className="text-[11px] text-gray-400 leading-relaxed font-light">
+                              개인 Supabase 대시보드의 {"Authentication -> Users"} 메뉴에서 가입 완료한 본인만의 이메일 계정으로 안전하게 접근 권한을 얻습니다. RLS(보안 규칙)와 직접 연계되어 해킹이 원천 불가합니다.
+                            </p>
+                            
+                            {!(credUrl.trim() && credKey.trim()) ? (
+                              <div className="bg-rose-50 border border-rose-100 p-3 rounded text-rose-800 text-[11px] leading-relaxed font-semibold">
+                                ⚠️ Supabase 연결 설정이 완료되지 않았습니다. 위 **'1단계: Supabase 연결 정보 설정'**에서 연결 정보(URL, Key)를 먼저 입력하여 저장 완료해 주세요.
+                              </div>
+                            ) : (
+                              <>
+                                <div>
+                                  <label className="block text-[10px] font-bold text-[#012d1d] mb-1">
+                                    관리자 이메일 계정 (EMAIL)
+                                  </label>
+                                  <div className="relative">
+                                    <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
+                                      <User className="w-3.5 h-3.5" />
+                                    </span>
+                                    <input
+                                      type="email"
+                                      placeholder="admin@example.com"
+                                      value={authEmail}
+                                      onChange={(e) => setAuthEmail(e.target.value)}
+                                      className="w-full pl-9 pr-3 py-2 bg-[#f8f9fa] border border-gray-200 rounded text-xs focus:ring-1 focus:ring-[#2b694d] focus:outline-none"
+                                    />
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-bold text-[#012d1d] mb-1">
+                                    관리자 비밀번호 (PASSWORD)
+                                  </label>
+                                  <div className="relative">
+                                    <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
+                                      <Lock className="w-3.5 h-3.5" />
+                                    </span>
+                                    <input
+                                      type="password"
+                                      placeholder="••••••••"
+                                      value={authPassword}
+                                      onChange={(e) => setAuthPassword(e.target.value)}
+                                      className="w-full pl-9 pr-3 py-2 bg-[#f8f9fa] border border-gray-200 rounded text-xs focus:ring-1 focus:ring-[#2b694d] focus:outline-none"
+                                    />
+                                  </div>
+                                </div>
+                                
+                                <button
+                                  type="submit"
+                                  disabled={isAuthenticating}
+                                  className="w-full py-2 bg-[#2b694d] hover:bg-[#1b4332] text-white text-xs font-bold rounded cursor-pointer transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 shadow-xs"
+                                >
+                                  {isAuthenticating ? (
+                                    <>
+                                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                      <span>Supabase Auth 로그인 중...</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Lock className="w-3.5 h-3.5" />
+                                      <span>Supabase 관리자 로그온인증</span>
+                                    </>
+                                  )}
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            <p className="text-[11px] text-amber-800 bg-amber-50 rounded-md p-2.5 leading-relaxed font-light">
+                              💡 초기 간단 테스트용 로컬 브라우저 패스코드 방식입니다. <br />
+                              자신의 포트폴리오를 외부에 완전히 배포하여 공인 서평 보드를 운영하시려면 **전체 RLS 규칙을 차단한 후 공식 Auth 해결책**으로 전환할 것을 적극 권장합니다.
+                            </p>
+                            
+                            <div>
+                              <label className="block text-[10px] font-bold text-amber-900 mb-1">
+                                관리자 패스코드 (PASSCODE)
+                              </label>
+                              <div className="relative">
+                                <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
+                                  <Key className="w-3.5 h-3.5" />
+                                </span>
+                                <input
+                                  type="password"
+                                  placeholder="인증 패스코드를 입력해 주세요."
+                                  value={adminPasscodeInput}
+                                  onChange={(e) => setAdminPasscodeInput(e.target.value)}
+                                  className="w-full pl-9 pr-3 py-2 bg-white border border-gray-250 rounded text-xs focus:ring-1 focus:ring-[#2b694d] focus:outline-none"
+                                />
+                              </div>
+                            </div>
+
+                            <button
+                              type="submit"
+                              className="w-full py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded cursor-pointer transition-all active:scale-95 shadow-xs flex items-center justify-center gap-1.5"
+                            >
+                              <Key className="w-3.5 h-3.5" />
+                              <span>간이 패스코드 인증완료</span>
+                            </button>
+                          </div>
+                        )}
+                      </form>
+
+                      <div className="flex justify-end pt-2 border-t border-gray-100">
+                        <button
+                          type="button"
+                          onClick={() => setShowCredModal(false)}
+                          className="px-4 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded cursor-pointer transition-colors"
+                        >
+                          취소 및 닫기 (읽기 전용 방문자 모드로 보기)
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ) : (
@@ -1026,7 +1125,7 @@ export default function ReadingView() {
                     <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-left">
                       <div className="flex items-center gap-2">
                         <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-                        <span className="text-xs font-bold text-emerald-900">관리자 인증 완료 (편집 및 Supabase 데이터 쓰기 권한이 활성화됨)</span>
+                        <span className="text-xs font-bold text-emerald-900 font-bold text-emerald-900">관리자 인증 완료 (편집 및 Supabase 데이터 쓰기 권한이 활성화됨)</span>
                       </div>
                       <button
                         type="button"
