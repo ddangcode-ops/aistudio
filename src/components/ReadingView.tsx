@@ -328,7 +328,7 @@ export default function ReadingView() {
       // Supabase Authenticated Login
       const client = getSupabaseClient();
       if (!client) {
-        showAlert("연동 오류", "Supabase 클라우드가 현재 설정되어 있지 않습니다. 우측 최상단의 'API 및 DB 연동 설정' 탭을 먼저 작성해 주세요.", "error");
+        showAlert("연동 오류", "Supabase 클라우드가 현재 설정되어 있지 않습니다. 책 검색창 오른쪽에 배치된 '관리자 로그인' (톱니바퀴 아이콘 ⚙️) 버튼을 눌러 연동 설정을 먼저 완료해 주세요.", "error");
         return;
       }
       
