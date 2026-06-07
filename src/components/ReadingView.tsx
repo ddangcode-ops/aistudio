@@ -797,10 +797,7 @@ export default function ReadingView() {
                           본 포트폴리오를 GitHub나 Vercel에 공개 배포(Deploy)했을 때, <strong>외부 방문자의 무단 수정/삭제/초기화를 100% 방지</strong>하기 위해 학계 및 실무에서 엄격하게 권장하는 <strong>보안상 '개인 브라우저 관리 방식 (Option A)'</strong>이 적용되어 있습니다.
                         </p>
                         <p className="text-[11px] text-amber-800 leading-relaxed mt-2 font-light">
-                          포트폴리오 소유주(학생 본인)께서 독서 기록 정보를 추가/수정/삭제하거나 본인만의 Supabase 서버를 새롭게 조율하시려면 아래에 관리자 인증 패스코드를 입력해 주세요.
-                        </p>
-                        <p className="text-[10px] text-gray-500 font-semibold leading-relaxed mt-2.5">
-                          🔑 초기 관리자 패스코드: <code className="bg-white px-1.5 py-0.5 rounded border border-gray-250 font-mono font-bold text-[#2b694d] select-all">icomssam77</code> 또는 <code className="bg-white px-1.5 py-0.5 rounded border border-gray-250 font-mono font-bold text-[#2b694d] select-all">1024</code>
+                          포트폴리오 소유주(학생 본인)께서 독서 기록 정보를 추가/수정/삭제하거나 본인만의 Supabase 서버를 새롭게 조율하시려면 관리자 인증 패스코드를 입력해 주세요.
                         </p>
                       </div>
                     </div>
