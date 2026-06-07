@@ -1,0 +1,8 @@
+{
+  "name": "icomssam Remix: Student Portfolio",
+  "description": "High school student academic and career portfolio focusing on reading, career progress, projects, and activities.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
