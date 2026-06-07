@@ -11,7 +11,8 @@ import {
   saveSupabaseCredentials, 
   clearSupabaseCredentials,
   seedBooksToSupabase,
-  SUPABASE_SQL_INSTRUCTION
+  SUPABASE_SQL_INSTRUCTION,
+  getSupabaseClient
 } from '../lib/supabase';
 import { 
   BookOpen, 
@@ -36,7 +37,10 @@ import {
   Library,
   HelpCircle,
   Info,
-  LogOut
+  LogOut,
+  Lock,
+  User,
+  Key
 } from 'lucide-react';
 
 const getCardBgColor = (category: string, id: string) => {
@@ -87,6 +91,12 @@ export default function ReadingView() {
   // User Authentication / Admin Mode state for GitHub / Vercel public distribution security (Option A)
   const [isAdminActive, setIsAdminActive] = useState<boolean>(false);
   const [adminPasscodeInput, setAdminPasscodeInput] = useState<string>('');
+  
+  // Supabase Official Auth Options
+  const [authMethod, setAuthMethod] = useState<'supabase_auth' | 'passcode'>('supabase_auth');
+  const [authEmail, setAuthEmail] = useState<string>('');
+  const [authPassword, setAuthPassword] = useState<string>('');
+  const [isAuthenticating, setIsAuthenticating] = useState<boolean>(false);
 
   // CRUD Form Dialog State
   const [showFormModal, setShowFormModal] = useState(false);
@@ -168,9 +178,41 @@ export default function ReadingView() {
     setCredKey(creds.key);
     
     // Check local admin active status
-    const isLocalAdmin = localStorage.getItem('icomssam_admin_active') === 'true';
+    const isLocalAdmin = localStorage.getItem('icomssam_admin_active_local') === 'true' || localStorage.getItem('icomssam_admin_active') === 'true';
     setIsAdminActive(isLocalAdmin);
   }, []);
+
+  // Supabase Auth session listener to auto-authenticate
+  useEffect(() => {
+    const client = getSupabaseClient();
+    if (!client) return;
+
+    // Check existing active session on load
+    client.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setIsAdminActive(true);
+        localStorage.setItem('icomssam_admin_active', 'true');
+      }
+    });
+
+    // Subscribe to auth state transitions
+    const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setIsAdminActive(true);
+        localStorage.setItem('icomssam_admin_active', 'true');
+      } else {
+        const isLocalAdmin = localStorage.getItem('icomssam_admin_active_local') === 'true';
+        if (!isLocalAdmin) {
+          setIsAdminActive(false);
+          localStorage.removeItem('icomssam_admin_active');
+        }
+      }
+    });
+
+    return () => {
+      subscription?.unsubscribe();
+    };
+  }, [credUrl, credKey]);
 
   // Compute stats on current loaded list dynamically
   const stats = useMemo(() => {
@@ -269,21 +311,70 @@ export default function ReadingView() {
   };
 
   // Admin Mode activation codes for security (Option A)
-  const handleUnlockAdminMode = (e: React.FormEvent) => {
+  const handleUnlockAdminMode = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (adminPasscodeInput === 'icomssam77' || adminPasscodeInput === '1024') {
-      localStorage.setItem('icomssam_admin_active', 'true');
-      setIsAdminActive(true);
-      setAdminPasscodeInput('');
-      showAlert("관리자 인증 성공", "독서 기록의 추가, 수정, 삭제 및 데이터 주입(Seed) 관리 권한이 모두 활성화되었습니다.", "success");
+    
+    if (authMethod === 'passcode') {
+      if (adminPasscodeInput === 'icomssam77' || adminPasscodeInput === '1024') {
+        localStorage.setItem('icomssam_admin_active_local', 'true');
+        localStorage.setItem('icomssam_admin_active', 'true');
+        setIsAdminActive(true);
+        setAdminPasscodeInput('');
+        showAlert("관리자 인증 성공", "독서 기록의 추가, 수정, 삭제 및 데이터 주입(Seed) 관리 권한이 모두 활성화되었습니다.", "success");
+      } else {
+        showAlert("인증 실패", "관리자 패스코드가 일치하지 않습니다. 다시 입력해 주세요.", "error");
+      }
     } else {
-      showAlert("인증 실패", "관리자 패스코드가 일치하지 않습니다. 다시 입력해 주세요.", "error");
+      // Supabase Authenticated Login
+      const client = getSupabaseClient();
+      if (!client) {
+        showAlert("연동 오류", "Supabase 클라우드가 현재 설정되어 있지 않습니다. 우측 최상단의 'API 및 DB 연동 설정' 탭을 먼저 작성해 주세요.", "error");
+        return;
+      }
+      
+      if (!authEmail || !authPassword) {
+        showAlert("입력 필요", "이메일과 비밀번호를 모두 입력해 주세요.", "error");
+        return;
+      }
+
+      setIsAuthenticating(true);
+      try {
+        const { data, error } = await client.auth.signInWithPassword({
+          email: authEmail.trim(),
+          password: authPassword,
+        });
+
+        if (error) {
+          showAlert("인증 실패", `Supabase Auth 로그인 오류: ${error.message}`, "error");
+        } else if (data?.user) {
+          localStorage.setItem('icomssam_admin_active', 'true');
+          setIsAdminActive(true);
+          showAlert("공식 Auth 인증 성공", `환영합니다! (${data.user.email}) 데이터베이스 수준의 완벽한 독서 기록 관리 권한이 부여되었습니다.`, "success");
+          setAuthEmail('');
+          setAuthPassword('');
+        }
+      } catch (err: any) {
+        showAlert("오류", err.message || "인증 처리 도중 예기치 못한 네트워크 오류가 발생했습니다.", "error");
+      } finally {
+        setIsAuthenticating(false);
+      }
     }
   };
 
-  const handleLockAdminMode = () => {
+  const handleLockAdminMode = async () => {
     localStorage.removeItem('icomssam_admin_active');
+    localStorage.removeItem('icomssam_admin_active_local');
     setIsAdminActive(false);
+    
+    const client = getSupabaseClient();
+    if (client) {
+      try {
+        await client.auth.signOut();
+      } catch (e) {
+        console.warn('Supabase signout issue:', e);
+      }
+    }
+    
     showAlert("관리자 해제 완료", "관리자 모드가 완전히 종료되었습니다. 이제 일반 방문자 모드로만 화면이 로드됩니다.", "info");
   };
 
@@ -786,39 +877,141 @@ export default function ReadingView() {
               </div>
 
               <div className="flex-1 overflow-y-auto space-y-5 py-4">
-                {/* Option A Secure Personal Browser lock */}
+                {/* Dual verification tab selection (Option A vs local pass) */}
                 {!isAdminActive ? (
-                  <div className="bg-amber-50/50 border border-amber-200/60 rounded-lg p-5 space-y-4">
+                  <div className="bg-[#fcfdfd] border border-gray-200 rounded-lg p-5 space-y-4 shadow-xs text-left">
                     <div className="flex gap-3 text-left">
-                      <HelpCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                      <HelpCircle className="w-5 h-5 text-emerald-700 flex-shrink-0 mt-0.5" />
                       <div>
-                        <h4 className="text-xs font-bold text-amber-900 leading-tight">포트폴리오 관리자 인증이 필요합니다</h4>
-                        <p className="text-[11px] text-amber-800 leading-relaxed mt-1.5 font-light">
-                          본 포트폴리오를 GitHub나 Vercel에 공개 배포(Deploy)했을 때, <strong>외부 방문자의 무단 수정/삭제/초기화를 100% 방지</strong>하기 위해 학계 및 실무에서 엄격하게 권장하는 <strong>보안상 '개인 브라우저 관리 방식 (Option A)'</strong>이 적용되어 있습니다.
-                        </p>
-                        <p className="text-[11px] text-amber-800 leading-relaxed mt-2 font-light">
-                          포트폴리오 소유주(학생 본인)께서 독서 기록 정보를 추가/수정/삭제하거나 본인만의 Supabase 서버를 새롭게 조율하시려면 관리자 인증 패스코드를 입력해 주세요.
+                        <h4 className="text-xs font-bold text-gray-900 leading-tight">포트폴리오 관리자 인증</h4>
+                        <p className="text-[11px] text-gray-550 leading-relaxed mt-1.5 font-light">
+                          실제 웹 서버 배포 시, <strong>제3자의 무단 데이터 수정 및 전면 초기화를 완벽하게 원천 차단</strong>하기 위해 학계 및 실무에서 강력히 추천되는 **Supabase 공식 인증(Auth) 해결책**이 내장되어 있습니다.
                         </p>
                       </div>
                     </div>
 
-                    <form onSubmit={handleUnlockAdminMode} className="flex gap-2 pt-1.5">
-                      <input
-                        type="password"
-                        placeholder="인증 코드를 입력하세요"
-                        value={adminPasscodeInput}
-                        onChange={(e) => setAdminPasscodeInput(e.target.value)}
-                        className="flex-1 px-3 py-2 bg-white border border-gray-250 rounded text-xs focus:ring-1 focus:ring-[#2b694d] focus:outline-none"
-                      />
+                    {/* Method Selector Tabs */}
+                    <div className="flex border-b border-gray-200 mt-2">
                       <button
-                        type="submit"
-                        className="px-4 py-2 bg-[#2b694d] hover:bg-[#1b4332] text-white text-xs font-bold rounded cursor-pointer transition-all active:scale-95 shadow-xs"
+                        type="button"
+                        onClick={() => setAuthMethod('supabase_auth')}
+                        className={`flex-1 pb-2 text-center text-xs font-bold border-b-2 transition-all cursor-pointer ${
+                          authMethod === 'supabase_auth'
+                            ? 'border-[#2b694d] text-[#2b694d]'
+                            : 'border-transparent text-gray-400 hover:text-gray-600'
+                        }`}
                       >
-                        인증하기
+                        🛡️ Supabase 공식 Auth 연동 (추천)
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => setAuthMethod('passcode')}
+                        className={`flex-1 pb-2 text-center text-xs font-bold border-b-2 transition-all cursor-pointer ${
+                          authMethod === 'passcode'
+                            ? 'border-amber-500 text-amber-600'
+                            : 'border-transparent text-gray-400 hover:text-gray-600'
+                        }`}
+                      >
+                        🔑 간이 패스코드 인증 (로컬)
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleUnlockAdminMode} className="space-y-4 pt-1.5">
+                      {authMethod === 'supabase_auth' ? (
+                        <div className="space-y-3">
+                          <p className="text-[11px] text-gray-400 leading-relaxed font-light">
+                            개인 Supabase 대시보드의 {"Authentication -> Users"} 메뉴에서 가입 완료한 본인만의 이메일 계정으로 안전하게 접근 권한을 얻습니다. RLS(보안 규칙)와 직접 연계되어 해킹이 원천 불가합니다.
+                          </p>
+                          <div>
+                            <label className="block text-[10px] font-bold text-[#012d1d] mb-1">
+                              관리자 이메일 계정 (EMAIL)
+                            </label>
+                            <div className="relative">
+                              <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
+                                <User className="w-3.5 h-3.5" />
+                              </span>
+                              <input
+                                type="email"
+                                placeholder="admin@example.com"
+                                value={authEmail}
+                                onChange={(e) => setAuthEmail(e.target.value)}
+                                className="w-full pl-9 pr-3 py-2 bg-[#f8f9fa] border border-gray-200 rounded text-xs focus:ring-1 focus:ring-[#2b694d] focus:outline-none"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-[#012d1d] mb-1">
+                              관리자 비밀번호 (PASSWORD)
+                            </label>
+                            <div className="relative">
+                              <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
+                                <Lock className="w-3.5 h-3.5" />
+                              </span>
+                              <input
+                                type="password"
+                                placeholder="••••••••"
+                                value={authPassword}
+                                onChange={(e) => setAuthPassword(e.target.value)}
+                                className="w-full pl-9 pr-3 py-2 bg-[#f8f9fa] border border-gray-200 rounded text-xs focus:ring-1 focus:ring-[#2b694d] focus:outline-none"
+                              />
+                            </div>
+                          </div>
+                          
+                          <button
+                            type="submit"
+                            disabled={isAuthenticating}
+                            className="w-full py-2 bg-[#2b694d] hover:bg-[#1b4332] text-white text-xs font-bold rounded cursor-pointer transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 shadow-xs"
+                          >
+                            {isAuthenticating ? (
+                              <>
+                                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                <span>Supabase Auth 로그인 중...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Lock className="w-3.5 h-3.5" />
+                                <span>Supabase 관리자 로그온인증</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          <p className="text-[11px] text-amber-800 bg-amber-50 rounded-md p-2.5 leading-relaxed font-light">
+                            💡 초기 간단 테스트용 로컬 브라우저 패스코드 방식입니다. <br />
+                            자신의 포트폴리오를 외부에 완전히 배포하여 공인 서평 보드를 운영하시려면 **전체 RLS 규칙을 차단한 후 공식 Auth 해결책**으로 전환할 것을 적극 권장합니다.
+                          </p>
+                          
+                          <div>
+                            <label className="block text-[10px] font-bold text-amber-900 mb-1">
+                              관리자 패스코드 (PASSCODE)
+                            </label>
+                            <div className="relative">
+                              <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">
+                                <Key className="w-3.5 h-3.5" />
+                              </span>
+                              <input
+                                type="password"
+                                placeholder="인증 패스코드를 입력해 주세요."
+                                value={adminPasscodeInput}
+                                onChange={(e) => setAdminPasscodeInput(e.target.value)}
+                                className="w-full pl-9 pr-3 py-2 bg-white border border-gray-250 rounded text-xs focus:ring-1 focus:ring-[#2b694d] focus:outline-none"
+                              />
+                            </div>
+                          </div>
+
+                          <button
+                            type="submit"
+                            className="w-full py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded cursor-pointer transition-all active:scale-95 shadow-xs flex items-center justify-center gap-1.5"
+                          >
+                            <Key className="w-3.5 h-3.5" />
+                            <span>간이 패스코드 인증완료</span>
+                          </button>
+                        </div>
+                      )}
                     </form>
 
-                    <div className="flex justify-end pt-2 border-t border-amber-100">
+                    <div className="flex justify-end pt-2 border-t border-gray-100">
                       <button
                         type="button"
                         onClick={() => setShowCredModal(false)}
@@ -908,34 +1101,56 @@ export default function ReadingView() {
                     <hr className="border-gray-100" />
 
                     {/* SQL setup guidelines */}
-                    <div className="space-y-2 text-left">
-                      <div className="flex justify-between items-center">
-                        <h4 className="text-xs font-bold text-[#012d1d] flex items-center gap-1">
-                          <span>1. 필수 테이블 및 RLS 정책 생성하기</span>
-                        </h4>
-                        <button
-                          onClick={handleCopySql}
-                          className="text-xs text-[#2b694d] hover:text-[#011a12] font-semibold flex items-center gap-1 border border-gray-200 rounded px-2.5 py-1 bg-white hover:bg-gray-50 cursor-pointer"
-                        >
-                          {copiedSql ? (
-                            <>
-                              <Check className="w-3 h-3 text-emerald-600" />
-                              <span>복사 완료!</span>
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="w-3 h-3" />
-                              <span>SQL 스크립트 복사</span>
-                            </>
-                          )}
-                        </button>
+                    <div className="space-y-4 text-left">
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <h4 className="text-xs font-bold text-[#012d1d] flex items-center gap-1">
+                            <span>1. 필수 테이블 및 기본 RLS 정책 생성하기</span>
+                          </h4>
+                          <button
+                            onClick={handleCopySql}
+                            className="text-xs text-[#2b694d] hover:text-[#011a12] font-semibold flex items-center gap-1 border border-gray-200 rounded px-2.5 py-1 bg-white hover:bg-gray-50 cursor-pointer"
+                          >
+                            {copiedSql ? (
+                              <>
+                                <Check className="w-3 h-3 text-emerald-600" />
+                                <span>복사 완료!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3 h-3" />
+                                <span>SQL 스크립트 복사</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                        <p className="text-[11px] text-gray-500 leading-relaxed">
+                          수퍼베이스 대시보드로 이동하여 <strong>SQL Editor</strong>에 아래의 쿼리를 입력하고 실행(Run)해 주세요:
+                        </p>
+                        
+                        <div className="max-h-36 overflow-y-auto w-full bg-slate-900 rounded p-3 text-[10px] font-mono text-slate-300 leading-normal border border-slate-800">
+                          <pre className="whitespace-pre-wrap text-left select-all">{SUPABASE_SQL_INSTRUCTION}</pre>
+                        </div>
                       </div>
-                      <p className="text-[11px] text-gray-500 leading-relaxed">
-                        수퍼베이스 대시보드로 이동하여 <strong>SQL Editor</strong>에 아래의 쿼리를 입력하고 실행(Run)해 주세요:
-                      </p>
-                      
-                      <div className="max-h-36 overflow-y-auto w-full bg-slate-900 rounded p-3 text-[10px] font-mono text-slate-300 leading-normal border border-slate-800">
-                        <pre className="whitespace-pre-wrap text-left select-all">{SUPABASE_SQL_INSTRUCTION}</pre>
+
+                      {/* Solutions A standard advice section */}
+                      <div className="p-3.5 bg-sky-50/50 border border-sky-150 rounded-lg space-y-2">
+                        <h5 className="text-[11px] font-bold text-sky-950 flex items-center gap-1">
+                          <span>🛡️ [해결책 A] 공식 Auth 로그온 완료 후, 쓰기권한 보안 RLS 적용 (권장)</span>
+                        </h5>
+                        <p className="text-[10px] text-sky-850 leading-relaxed font-light">
+                          자신의 Supabase 대시보드 {"Authentication -> Users"} 메뉴에서 본인의 관리자 계정 생성 및 로그인을 마치셨다면, 누구나 접근 가능한 기존 학업 테스트용 쓰기 권한을 차단하고 <strong>오직 가입 본인 계정만 글을 추가/수정/삭제하도록</strong> 아래 쿼리를 SQL Editor에서 대신 실행해 보안 설정을 교체해 주세요:
+                        </p>
+                        <div className="max-h-28 overflow-y-auto w-full bg-slate-900 rounded p-2.5 text-[10px] font-mono text-emerald-400 leading-normal border border-slate-800">
+                          <pre className="whitespace-pre-wrap select-all">{`-- 1. 기존 비로그인/익명 기입용 RLS 정책 삭제
+DROP POLICY IF EXISTS "Allow public insert" ON icomssam_books;
+DROP POLICY IF EXISTS "Allow public update" ON icomssam_books;
+DROP POLICY IF EXISTS "Allow public delete" ON icomssam_books;
+
+-- 2. 새롭게 공식 로그인 완료한(authenticated) 사용자에게만 모든 쓰기/수정 권한 적용
+CREATE POLICY "Allow write for authenticated users only" ON icomssam_books
+  FOR ALL TO authenticated USING (true) WITH CHECK (true);`}</pre>
+                        </div>
                       </div>
                     </div>
 
