@@ -173,10 +173,11 @@ export default function ReadingView() {
 
   useEffect(() => {
     loadData();
-    // Prefill credentials config inputs
-    const creds = getSupabaseCredentials();
-    setCredUrl(creds.url);
-    setCredKey(creds.key);
+    // Prefill credentials config inputs ONLY from localStorage overrides to prevent leaking client environment variables publicly
+    const localUrl = localStorage.getItem('icomssam_supabase_url') || '';
+    const localKey = localStorage.getItem('icomssam_supabase_key') || '';
+    setCredUrl(localUrl);
+    setCredKey(localKey);
     
     // Check local admin active status
     const isLocalAdmin = localStorage.getItem('icomssam_admin_active_local') === 'true' || localStorage.getItem('icomssam_admin_active') === 'true';
@@ -885,21 +886,86 @@ export default function ReadingView() {
                       <div className="flex gap-2.5 items-start mb-3">
                         <DatabaseZap className="w-5 h-5 text-emerald-700 flex-shrink-0 mt-0.5" />
                         <div>
-                          <h4 className="text-xs font-bold text-gray-900 leading-tight">1단계: Supabase 연결 정보 설정 (필수)</h4>
+                          <h4 className="text-xs font-bold text-gray-900 leading-tight">1단계: Supabase 연결 설정 상태</h4>
                           <p className="text-[10px] text-gray-500 leading-relaxed mt-1 font-light">
-                            포트폴리오 본인 소유의 Supabase DB를 브라우저 로컬 저장소에 연동합니다. 연동이 저장되어야 관리자 기능(글쓰기/수정/삭제)과 공식 로그인을 사용할 수 있습니다.
+                            포트폴리오 소유의 Supabase 실시간 클라우드 DB와의 연동 연결을 확인하고 설정하는 영역입니다.
                           </p>
                         </div>
                       </div>
 
-                      {!(credUrl.trim() && credKey.trim()) || showDbSettingsForm ? (
+                      {getSupabaseCredentials().isEnvProvided && !getSupabaseCredentials().isLocalOverride && !showDbSettingsForm ? (
+                        /* Case A: Admin ENV variables are loaded securely without exposing secrets */
+                        <div className="pt-2.5 border-t border-emerald-100/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white p-2.5 rounded border border-emerald-100">
+                          <div className="text-xs">
+                            <div className="flex items-center gap-1.5 text-emerald-800 font-bold text-[11px]">
+                              <Check className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>📡 서버 보안 환경변수(VITE_ENV)로 실시간 연결됨</span>
+                            </div>
+                            <span className="block text-[10px] text-gray-400 mt-0.5 max-w-[320px]">
+                              주소: https://****************.supabase.co (보안 자동 감춤)
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCredUrl('');
+                              setCredKey('');
+                              setShowDbSettingsForm(true);
+                            }}
+                            className="px-2.5 py-1 text-emerald-700 hover:text-white hover:bg-emerald-700 border border-emerald-600 rounded text-[10px] font-bold transition-all cursor-pointer"
+                          >
+                            개인 DB 정보로 재정의(덮어쓰기)
+                          </button>
+                        </div>
+                      ) : getSupabaseCredentials().isLocalOverride && !showDbSettingsForm ? (
+                        /* Case B: Connected and saved in local storage keys */
+                        <div className="pt-2.5 border-t border-emerald-100/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white p-2.5 rounded border border-emerald-100">
+                          <div className="text-xs">
+                            <div className="flex items-center gap-1.5 text-emerald-850 font-bold text-[11px]">
+                              <Check className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>📡 브라우저 로컬 저장소(LocalStorage) 재정의로 연결됨</span>
+                            </div>
+                            <span className="block text-[10px] text-gray-400 mt-0.5 truncate max-w-[320px]">
+                              주소: {credUrl} (저장 완료)
+                            </span>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setShowDbSettingsForm(true)}
+                              className="px-2 py-1 text-emerald-700 hover:text-white hover:bg-emerald-700 border border-emerald-600 rounded text-[10px] font-bold transition-all cursor-pointer"
+                            >
+                              설정 수정
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                clearSupabaseCredentials();
+                                setCredUrl('');
+                                setCredKey('');
+                                loadData();
+                                showAlert("연동 초기화", "로컬 설정을 해제했습니다. 기본 환경변수가 등록되어 있으면 시스템 DB로 복원됩니다.", "info");
+                              }}
+                              className="px-2 py-1 text-rose-600 hover:text-white hover:bg-rose-600 border border-rose-500 rounded text-[10px] font-bold transition-all cursor-pointer"
+                            >
+                              재정의 해제
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        /* Case C: Form inputs with overrides or no credentials */
                         <form onSubmit={(e) => {
                           e.preventDefault();
                           saveSupabaseCredentials(credUrl, credKey);
                           loadData();
                           setShowDbSettingsForm(false);
-                          showAlert("연동 완료", "Supabase 클라우드 연결 정보가 성공적으로 저장되었습니다. 계속해서 2단계 인증을 진행해 주세요.", "success");
+                          showAlert("연동 완료", "Supabase 클라우드 연결 정보가 성공적으로 수동 설정 및 저장되었습니다.", "success");
                         }} className="space-y-3 pt-1 border-t border-emerald-100/50">
+                          {getSupabaseCredentials().isEnvProvided && (
+                            <div className="bg-emerald-50 text-emerald-800 p-2.5 rounded text-[10px] leading-relaxed mb-2 font-medium">
+                              💡 시스템에 안전하게 등록된 환경변수 DB가 존재합니다. 양식을 덮어써서 개인 테스트용 DB로 바꾸거나 비워두시면 시스템 기본값인 보안 연동 DB로 복원됩니다.
+                            </div>
+                          )}
                           <div>
                             <label className="block text-[10px] font-bold text-[#012d1d] mb-1">
                               SUPABASE URL
@@ -923,47 +989,32 @@ export default function ReadingView() {
                               required
                               value={credKey}
                               onChange={(e) => setCredKey(e.target.value)}
-                              className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded text-xs focus:ring-1 focus:ring-[#2b694d] focus:outline-none"
+                              className="w-full px-3 py-1.5 bg-white border border-gray-250 rounded text-xs focus:ring-1 focus:ring-[#2b694d] focus:outline-none"
                             />
                           </div>
 
                           <div className="flex justify-end gap-2 pt-1">
-                            {credUrl && credKey && (
+                            {getSupabaseCredentials().isEnvProvided && (
                               <button
                                 type="button"
-                                onClick={() => setShowDbSettingsForm(false)}
+                                onClick={() => {
+                                  setShowDbSettingsForm(false);
+                                  setCredUrl('');
+                                  setCredKey('');
+                                }}
                                 className="px-3 py-1.5 bg-gray-150 hover:bg-gray-200 text-gray-700 text-[10px] font-bold rounded cursor-pointer transition-colors"
                               >
-                                취소
+                                취소 (보안 환경변수로 복원)
                               </button>
                             )}
                             <button
                               type="submit"
                               className="px-3 py-1.5 bg-[#2b694d] hover:bg-[#1b4332] text-white text-[10px] font-bold rounded cursor-pointer hover:shadow-sm"
                             >
-                              연동 정보 저장 및 활성화
+                              연동 정보 수동 저장 및 활성화
                             </button>
                           </div>
                         </form>
-                      ) : (
-                        <div className="pt-2.5 border-t border-emerald-100/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white p-2.5 rounded border border-emerald-100">
-                          <div className="text-xs">
-                            <div className="flex items-center gap-1.5 text-emerald-800 font-bold text-[11px]">
-                              <Check className="w-3.5 h-3.5 text-emerald-600" />
-                              <span>📡 Supabase 연결 활성화됨</span>
-                            </div>
-                            <span className="block text-[10px] text-gray-400 mt-0.5 truncate max-w-[320px]">
-                              URL: {credUrl} (저장 완료)
-                            </span>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setShowDbSettingsForm(true)}
-                            className="px-2.5 py-1 text-emerald-700 hover:text-white hover:bg-emerald-700 border border-emerald-600 rounded text-[10px] font-bold transition-all cursor-pointer"
-                          >
-                            연동 정보 수정
-                          </button>
-                        </div>
                       )}
                     </div>
 
@@ -1012,9 +1063,9 @@ export default function ReadingView() {
                               개인 Supabase 대시보드의 {"Authentication -> Users"} 메뉴에서 가입 완료한 본인만의 이메일 계정으로 안전하게 접근 권한을 얻습니다. RLS(보안 규칙)와 직접 연계되어 해킹이 원천 불가합니다.
                             </p>
                             
-                            {!(credUrl.trim() && credKey.trim()) ? (
+                            {!getSupabaseCredentials().isConfigured ? (
                               <div className="bg-rose-50 border border-rose-100 p-3 rounded text-rose-800 text-[11px] leading-relaxed font-semibold">
-                                ⚠️ Supabase 연결 설정이 완료되지 않았습니다. 위 **'1단계: Supabase 연결 정보 설정'**에서 연결 정보(URL, Key)를 먼저 입력하여 저장 완료해 주세요.
+                                ⚠️ Supabase 연결 설정이 완료되지 않았습니다. 위 **'1단계: Supabase 연결 설정 상태'**에서 수동 저장소 등록을 하거나 환경변수가 바르게 세팅되어야 진행할 수 있습니다.
                               </div>
                             ) : (
                               <>
@@ -1125,7 +1176,7 @@ export default function ReadingView() {
                     <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-left">
                       <div className="flex items-center gap-2">
                         <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-                        <span className="text-xs font-bold text-emerald-900 font-bold text-emerald-900">관리자 인증 완료 (편집 및 Supabase 데이터 쓰기 권한이 활성화됨)</span>
+                        <span className="text-xs font-bold text-emerald-900">관리자 인증 완료 (편집 및 Supabase 데이터 쓰기 권한이 활성화됨)</span>
                       </div>
                       <button
                         type="button"
@@ -1136,7 +1187,153 @@ export default function ReadingView() {
                       </button>
                     </div>
 
-                    <p className="text-xs text-gray-500 leading-relaxed text-left">
+                    <div className="bg-[#f3f9f6] border border-emerald-150 rounded-lg p-5 shadow-xs text-left my-4">
+                      <div className="flex gap-2.5 items-start mb-3">
+                        <DatabaseZap className="w-5 h-5 text-emerald-700 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <h4 className="text-xs font-bold text-gray-900 leading-tight font-bold text-gray-900">Supabase 데이터베이스 연동 정보</h4>
+                          <p className="text-[10px] text-gray-500 leading-relaxed mt-1 font-light">
+                            실시간 독서 기록 동기화를 수행하며, 보안상 전서버 배포 시 환경변수(VITE_ENV) 연동을 우선 처리합니다.
+                          </p>
+                        </div>
+                      </div>
+
+                      {getSupabaseCredentials().isEnvProvided && !getSupabaseCredentials().isLocalOverride && !showDbSettingsForm ? (
+                        /* Case A: ENV vars are actively used */
+                        <div className="pt-2.5 border-t border-emerald-100/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white p-2.5 rounded border border-emerald-100">
+                          <div className="text-xs">
+                            <div className="flex items-center gap-1.5 text-emerald-800 font-bold text-[11px]">
+                              <Check className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>📡 서버 보안 환경변수(VITE_ENV) 연동 기동 중</span>
+                            </div>
+                            <span className="block text-[10px] text-gray-400 mt-0.5">
+                              주소: https://****************.supabase.co (보안 자동 감춤)
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCredUrl('');
+                              setCredKey('');
+                              setShowDbSettingsForm(true);
+                            }}
+                            className="px-2.5 py-1 text-emerald-700 hover:text-white hover:bg-emerald-700 border border-emerald-600 rounded text-[10px] font-bold transition-all cursor-pointer"
+                          >
+                            개인 DB 연동으로 수동 덮어쓰기
+                          </button>
+                        </div>
+                      ) : getSupabaseCredentials().isLocalOverride && !showDbSettingsForm ? (
+                        /* Case B: Local storage is actively used */
+                        <div className="pt-2.5 border-t border-emerald-100/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white p-2.5 rounded border border-emerald-100">
+                          <div className="text-xs">
+                            <div className="flex items-center gap-1.5 text-[#144234] font-bold text-[11px]">
+                              <Check className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>📡 브라우저 로컬 저장소(LocalStorage) 연동 동작 중</span>
+                            </div>
+                            <span className="block text-[10px] text-gray-400 mt-0.5 truncate max-w-[320px]">
+                              주소: {credUrl} (저장 완료)
+                            </span>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setShowDbSettingsForm(true)}
+                              className="px-2 py-1 text-emerald-700 hover:text-white hover:bg-emerald-700 border border-emerald-600 rounded text-[10px] font-bold transition-all cursor-pointer"
+                            >
+                              설정 수정
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                clearSupabaseCredentials();
+                                setCredUrl('');
+                                setCredKey('');
+                                loadData();
+                                showAlert("연동 초기화", "로컬 설정을 초기화하고 시스템 기본 보안 환경변수가 제공될 시 복원되었습니다.", "info");
+                              }}
+                              className="px-2 py-1 text-rose-600 hover:text-white hover:bg-rose-600 border border-rose-500 rounded text-[10px] font-bold transition-all cursor-pointer"
+                            >
+                              설정 초기화
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        /* Case C: Form inputs with overrides or no credentials */
+                        <form onSubmit={(e) => {
+                          e.preventDefault();
+                          saveSupabaseCredentials(credUrl, credKey);
+                          loadData();
+                          setShowDbSettingsForm(false);
+                          showAlert("연동 완료", "Supabase 데이터베이스 연결 정보 수동 저장이 완료되었습니다.", "success");
+                        }} className="space-y-4 pt-1 border-t border-emerald-100/50">
+                          {getSupabaseCredentials().isEnvProvided && (
+                            <div className="bg-emerald-50 text-emerald-800 p-2.5 rounded text-[10px] leading-relaxed mb-1 font-medium">
+                              💡 시스템에 입력되어 있는 보안 환경변수 DB가 존재합니다. 직접 덮어쓰시거나 값을 비우고 취소하여 보안 환경변수로 복원할 수 있습니다.
+                            </div>
+                          )}
+                          <div>
+                            <label className="block text-xs font-bold text-[#012d1d] mb-1">
+                              SUPABASE URL
+                            </label>
+                            <input
+                              type="url"
+                              placeholder="https://yourprojectid.supabase.co"
+                              required
+                              value={credUrl}
+                              onChange={(e) => setCredUrl(e.target.value)}
+                              className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded text-xs focus:ring-1 focus:ring-[#2b694d] focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-[#012d1d] mb-1">
+                              SUPABASE ANON KEY (PUBLIC KEY)
+                            </label>
+                            <input
+                              type="password"
+                              placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                              required
+                              value={credKey}
+                              onChange={(e) => setCredKey(e.target.value)}
+                              className="w-full px-3 py-1.5 bg-white border border-gray-250 rounded text-xs focus:ring-1 focus:ring-[#2b694d] focus:outline-none"
+                            />
+                          </div>
+
+                          <div className="flex justify-between items-center gap-2 pt-2">
+                            <button
+                              type="button"
+                              onClick={handleResetCredentials}
+                              className="text-xs text-rose-600 hover:underline border-none bg-transparent cursor-pointer font-semibold text-left"
+                            >
+                              기록 초기화 (LocalStorage 모드로 환원)
+                            </button>
+                            <div className="flex gap-2">
+                              {(getSupabaseCredentials().isEnvProvided || getSupabaseCredentials().isLocalOverride) && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setShowDbSettingsForm(false);
+                                    const localUrl = localStorage.getItem('icomssam_supabase_url') || '';
+                                    const localKey = localStorage.getItem('icomssam_supabase_key') || '';
+                                    setCredUrl(localUrl);
+                                    setCredKey(localKey);
+                                  }}
+                                  className="px-4 py-1.8 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded cursor-pointer transition-colors"
+                                >
+                                  취소
+                                </button>
+                              )}
+                              <button
+                                type="submit"
+                                className="px-4 py-1.8 bg-[#2b694d] hover:bg-[#1b4332] text-white text-xs font-bold rounded cursor-pointer flex items-center gap-1 shadow-sm"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                                연동 정보 수동 저장
+                              </button>
+                            </div>
+                          </div>
+                        </form>
+                      )}
+                    </div>           <p className="text-xs text-gray-500 leading-relaxed text-left">
                       본인의 Supabase 클라우드 주소와 키를 설정하여 실시간 데이터베이스에 데이터를 저장 및 동기화할 수 있습니다. <br />
                       키를 비워두거나 삭제하면 브라우저 LocalStorage 단독 모드(로컬 기록 동작)로 전환됩니다.
                     </p>
