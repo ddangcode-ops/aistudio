@@ -12,7 +12,8 @@ import {
   clearSupabaseCredentials,
   seedBooksToSupabase,
   SUPABASE_SQL_INSTRUCTION,
-  getSupabaseClient
+  getSupabaseClient,
+  maskSupabaseUrl
 } from '../lib/supabase';
 import { 
   BookOpen, 
@@ -926,7 +927,7 @@ export default function ReadingView() {
                               <span>📡 브라우저 로컬 저장소(LocalStorage) 재정의로 연결됨</span>
                             </div>
                             <span className="block text-[10px] text-gray-400 mt-0.5 truncate max-w-[320px]">
-                              주소: {credUrl} (저장 완료)
+                              주소: {maskSupabaseUrl(credUrl)} (저장 완료)
                             </span>
                           </div>
                           <div className="flex gap-2">
@@ -1231,7 +1232,7 @@ export default function ReadingView() {
                               <span>📡 브라우저 로컬 저장소(LocalStorage) 연동 동작 중</span>
                             </div>
                             <span className="block text-[10px] text-gray-400 mt-0.5 truncate max-w-[320px]">
-                              주소: {credUrl} (저장 완료)
+                              주소: {maskSupabaseUrl(credUrl)} (저장 완료)
                             </span>
                           </div>
                           <div className="flex gap-2">

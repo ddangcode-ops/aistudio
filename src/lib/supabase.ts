@@ -7,6 +7,27 @@ const SUPABASE_URL_KEY = 'icomssam_supabase_url';
 const SUPABASE_KEY_KEY = 'icomssam_supabase_key';
 const LOCAL_BOOKS_KEY = 'icomssam_local_books';
 
+// Mask Supabase URL to hide project ID partially (e.g. https://zwmx*****************.supabase.co)
+export function maskSupabaseUrl(url: string): string {
+  if (!url) return '';
+  try {
+    const trimmed = url.trim();
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      const parsed = new URL(trimmed);
+      const hostParts = parsed.hostname.split('.');
+      if (hostParts.length > 0) {
+        const projectId = hostParts[0];
+        const visibleLength = Math.min(4, Math.floor(projectId.length / 2));
+        const masked = projectId.slice(0, visibleLength) + '*'.repeat(Math.max(4, projectId.length - visibleLength));
+        return `${parsed.protocol}//${masked}.${hostParts.slice(1).join('.')}`;
+      }
+    }
+  } catch (e) {
+    // ignore
+  }
+  return 'https://****************.supabase.co';
+}
+
 // Get current Supabase credentials (checks local override first, then Vite env vars)
 export function getSupabaseCredentials() {
   let localUrl = '';
@@ -17,8 +38,15 @@ export function getSupabaseCredentials() {
     localKey = localStorage.getItem(SUPABASE_KEY_KEY) || '';
   }
   
-  const envUrl = import.meta.env.VITE_SUPABASE_URL || '';
-  const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+  // Detect if the app is loaded from a shared preview or visitor URL (typically contains '-pre-' in hostname)
+  const isSharedEnv = typeof window !== 'undefined' && (
+    window.location.hostname.includes('-pre-') || 
+    window.location.search.includes('is_shared=true')
+  );
+
+  // If on a shared link, completely clear environment backup variables so visitors start clean and use LocalStorage/their own DB.
+  const envUrl = isSharedEnv ? '' : (import.meta.env.VITE_SUPABASE_URL || '');
+  const envKey = isSharedEnv ? '' : (import.meta.env.VITE_SUPABASE_ANON_KEY || '');
 
   return {
     url: localUrl || envUrl || '',
@@ -26,6 +54,7 @@ export function getSupabaseCredentials() {
     isLocalOverride: !!(localUrl && localKey),
     isEnvProvided: !!(envUrl && envKey),
     isConfigured: !!(localUrl || envUrl) && !!(localKey || envKey),
+    isSharedVisitor: isSharedEnv
   };
 }
 
